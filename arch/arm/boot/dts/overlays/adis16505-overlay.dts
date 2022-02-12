@@ -1,0 +1,60 @@
+/*
+ * Device tree overlay for adis16505 on spi0.0
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/pinctrl/bcm2835.h>
+
+/ {
+    compatible = "brcm,bcm2835";
+    /* disable spi-dev for spi0.0 */
+
+    fragment@0 {
+        target = <&spi0>;
+        __overlay__ {
+            status = "okay";
+        };
+    };
+
+    fragment@1 {
+	target = <&spidev0>;
+	__overlay__ {
+	    status = "disabled";
+	};
+    };
+
+    fragment@2 {
+        target = <&gpio>;
+        __overlay__ {
+            adis_pins: adis_pins {
+                brcm,pins = <12>;
+                brcm,function = <0>; // input
+            };
+        };
+    };
+
+    /* the spi config of the can-controller itself binding everything together */
+    fragment@3 {
+        target = <&spi0>;
+        __overlay__ {
+            /* needed to avoid dtc warning */
+            #address-cells = <1>;
+            #size-cells = <0>;
+            adis16505_device: adis@0 {
+                compatible = "frc971,adis16505";
+                reg = <0>;
+                pinctrl-names = "default";
+                pinctrl-0 = <&adis_pins>;
+
+		spi-max-frequency = <5000000>;
+                //data-ready = <&gpio 12 0>;
+
+                interrupt-parent = <&gpio>;
+// 2 -> edge....
+                interrupts = <12 4>; /* low level triggered */
+            };
+        };
+    };
+};
