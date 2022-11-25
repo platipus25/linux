@@ -11,6 +11,8 @@
  * Copyright (C) 2016, Synopsys, Inc.
  */
 
+#define DEBUG 1
+
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/gpio/consumer.h>
@@ -586,6 +588,9 @@ static int ov5647_write16(struct v4l2_subdev *sd, u16 reg, u16 val)
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int ret;
 
+	dev_dbg(&client->dev, "%s: writing 2 bytes, reg %x, val %x\n", __func__,
+		reg, val);
+
 	ret = i2c_master_send(client, data, 4);
 	if (ret < 0) {
 		dev_dbg(&client->dev, "%s: i2c write error, reg: %x\n",
@@ -601,6 +606,9 @@ static int ov5647_write(struct v4l2_subdev *sd, u16 reg, u8 val)
 	unsigned char data[3] = { reg >> 8, reg & 0xff, val};
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int ret;
+
+	dev_dbg(&client->dev, "%s: writing 1 bytes, reg %x, val %x\n", __func__,
+		reg, val);
 
 	ret = i2c_master_send(client, data, 3);
 	if (ret < 0) {
@@ -618,6 +626,8 @@ static int ov5647_read(struct v4l2_subdev *sd, u16 reg, u8 *val)
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	int ret;
 
+	dev_dbg(&client->dev, "%s: reading 1 bytes, reg %x\n", __func__, reg);
+
 	ret = i2c_master_send(client, data_w, 2);
 	if (ret < 0) {
 		dev_dbg(&client->dev, "%s: i2c write error, reg: %x\n",
@@ -626,6 +636,10 @@ static int ov5647_read(struct v4l2_subdev *sd, u16 reg, u8 *val)
 	}
 
 	ret = i2c_master_recv(client, val, 1);
+
+	dev_dbg(&client->dev, "%s: reading 1 bytes, reg %x, val %x\n", __func__,
+		reg, *val);
+
 	if (ret < 0) {
 		dev_dbg(&client->dev, "%s: i2c read error, reg: %x\n",
 				__func__, reg);
@@ -1224,18 +1238,23 @@ static int ov5647_s_ctrl(struct v4l2_ctrl *ctrl)
 
 	switch (ctrl->id) {
 	case V4L2_CID_AUTO_WHITE_BALANCE:
+		dev_info(&client->dev, "Setting auto white balance to %d\n", ctrl->val);
 		ret = ov5647_s_auto_white_balance(sd, ctrl->val);
 		break;
 	case V4L2_CID_AUTOGAIN:
+		dev_info(&client->dev, "Setting autogain to %d\n", ctrl->val);
 		ret = ov5647_s_autogain(sd, ctrl->val);
 		break;
 	case V4L2_CID_EXPOSURE_AUTO:
+		dev_info(&client->dev, "Setting exposure value to %d\n", ctrl->val);
 		ret = ov5647_s_exposure_auto(sd, ctrl->val);
 		break;
 	case V4L2_CID_ANALOGUE_GAIN:
+		dev_info(&client->dev, "Setting analog gain to %d\n", ctrl->val);
 		ret =  ov5647_s_analogue_gain(sd, ctrl->val);
 		break;
 	case V4L2_CID_EXPOSURE:
+		dev_info(&client->dev, "Setting exposure to %d\n", ctrl->val);
 		ret = ov5647_s_exposure(sd, ctrl->val);
 		break;
 	case V4L2_CID_VBLANK:
@@ -1384,7 +1403,7 @@ static int ov5647_probe(struct i2c_client *client)
 	}
 
 	xclk_freq = clk_get_rate(sensor->xclk);
-	if (xclk_freq != 25000000) {
+	if (xclk_freq != 6000000) {
 		dev_err(dev, "Unsupported clock frequency: %u\n", xclk_freq);
 		return -EINVAL;
 	}

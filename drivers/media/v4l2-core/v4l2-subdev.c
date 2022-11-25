@@ -8,6 +8,8 @@
  *	    Sakari Ailus <sakari.ailus@iki.fi>
  */
 
+#define DEBUG 1
+
 #include <linux/ioctl.h>
 #include <linux/mm.h>
 #include <linux/module.h>

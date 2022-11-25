@@ -395,13 +395,14 @@ static int rkisp1_csi_s_stream(struct v4l2_subdev *sd, int enable)
 
 	source_pad = media_entity_remote_source_pad_unique(&sd->entity);
 	if (IS_ERR(source_pad)) {
-		dev_dbg(rkisp1->dev, "Failed to get source for CSI: %ld\n",
+		dev_err(rkisp1->dev, "Failed to get source for CSI: %ld\n",
 			PTR_ERR(source_pad));
 		return -EPIPE;
 	}
 
 	source = media_entity_to_v4l2_subdev(source_pad->entity);
 	if (!source) {
+          dev_err(rkisp1->dev, "Should not happen A\n");
 		/* This should really not happen, so is not worth a message. */
 		return -EPIPE;
 	}

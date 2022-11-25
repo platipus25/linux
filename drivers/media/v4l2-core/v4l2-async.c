@@ -4,6 +4,7 @@
  *
  * Copyright (C) 2012-2013, Guennadi Liakhovetski <g.liakhovetski@gmx.de>
  */
+#define DEBUG 1
 
 #include <linux/debugfs.h>
 #include <linux/device.h>
