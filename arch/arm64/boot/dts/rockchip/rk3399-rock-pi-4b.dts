@@ -17,7 +17,7 @@
 };
 
 &sdio0 {
-	status = "okay";
+	status = "disabled";
 
 	brcmf: wifi@1 {
 		compatible = "brcm,bcm4329-fmac";
@@ -31,7 +31,7 @@
 };
 
 &uart0 {
-	status = "okay";
+	status = "disabled";
 
 	bluetooth {
 		compatible = "brcm,bcm4345c5";
