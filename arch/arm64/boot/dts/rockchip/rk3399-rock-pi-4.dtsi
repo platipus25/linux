@@ -154,6 +154,19 @@
 		regulator-min-microvolt = <800000>;
 		regulator-max-microvolt = <1400000>;
 	};
+
+	leds {
+		compatible = "gpio-leds";
+		pinctrl-names = "default";
+		pinctrl-0 = <&status_led_pin>;
+
+		status_led: led-0 {
+			label = "status_led";
+			linux,default-trigger = "activity";
+			// TODO(austin): PD4 should also work...  Why doesn't it?  Corrupts the console...
+			gpios = <&gpio3 RK_PD5 GPIO_ACTIVE_HIGH>;
+		};
+	};
 };
 
 &cpu_l0 {
@@ -660,6 +673,13 @@
                                 <1 RK_PB5 RK_FUNC_GPIO &pcfg_output_high>;      //camera module enable pin
                 };
         };
+
+
+	leds {
+		status_led_pin: status-led-pin {
+			rockchip,pins = <3 RK_PD5 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
 };
 
 &mipi_dphy_rx0 {
