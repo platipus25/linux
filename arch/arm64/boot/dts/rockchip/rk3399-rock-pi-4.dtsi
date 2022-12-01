@@ -37,18 +37,21 @@
 	};
 
 	sound: sound {
+                status = "disabled";
 		compatible = "audio-graph-card";
 		label = "Analog";
 		dais = <&i2s0_p0>;
 	};
 
 	sound-dit {
+                status = "disabled";
 		compatible = "audio-graph-card";
 		label = "SPDIF";
 		dais = <&spdif_p0>;
 	};
 
 	spdif-dit {
+                status = "disabled";
 		compatible = "linux,spdif-dit";
 		#sound-dai-cells = <0>;
 
