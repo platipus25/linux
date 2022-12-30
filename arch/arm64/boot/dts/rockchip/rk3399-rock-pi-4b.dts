@@ -47,3 +47,40 @@
 		vddio-supply = <&vcc_1v8>;
 	};
 };
+
+&pinctrl {
+	pcfg_input_pull_down_3v3: pcfg-input-pull-down-3v3 {
+		input-enable;
+		bias-pull-down;
+		drive-strength = <4>;
+	};
+
+	spdif {
+		status = "disabled";
+	};
+
+	spi1 {
+		adis_pins: adis_pins {
+			rockchip,pins = <3 RK_PC0 0 &pcfg_input_pull_down_3v3>;
+			//brcm,function = <0>; // input
+		};
+	};
+};
+
+&spi1 {
+	status = "okay";
+
+	adis16505_device: adis@0 {
+		compatible = "frc971,adis16505";
+		reg = <0>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&adis_pins>;
+
+		spi-max-frequency = <2000000>;
+		//data-ready = <&gpio 12 0>;
+
+		interrupt-parent = <&gpio3>;
+		// 2 -> edge....
+		interrupts = <RK_PC0 IRQ_TYPE_LEVEL_HIGH>; /* low level triggered */
+	};
+};
