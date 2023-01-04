@@ -29,8 +29,15 @@
 #define IMX290_BLKLEVEL_LOW 0x300a
 #define IMX290_BLKLEVEL_HIGH 0x300b
 #define IMX290_GAIN 0x3014
+#define IMX290_VMAX_LOW 0x3018
+#define IMX290_VMAX_MAX 0x3fff
 #define IMX290_HMAX_LOW 0x301c
 #define IMX290_HMAX_HIGH 0x301d
+#define IMX290_HMAX_MAX 0xffff
+
+#define IMX290_EXPOSURE_MIN 1
+#define IMX290_EXPOSURE_STEP 1
+#define IMX290_EXPOSURE_LOW 0x3020
 #define IMX290_PGCTRL 0x308c
 #define IMX290_PHY_LANE_NUM 0x3407
 #define IMX290_CSI_LANE_MODE 0x3443
@@ -39,7 +46,7 @@
 #define IMX290_PGCTRL_THRU BIT(1)
 #define IMX290_PGCTRL_MODE(n) ((n) << 4)
 
-static const char * const imx290_supply_name[] = {
+static const char *const imx290_supply_name[] = {
 	"vdda",
 	"vddd",
 	"vdddo",
@@ -56,6 +63,7 @@ struct imx290_mode {
 	u32 width;
 	u32 height;
 	u32 hmax;
+	u32 vmax;
 	u8 link_freq_index;
 
 	const struct imx290_regval *data;
@@ -80,6 +88,9 @@ struct imx290 {
 	struct v4l2_ctrl_handler ctrls;
 	struct v4l2_ctrl *link_freq;
 	struct v4l2_ctrl *pixel_rate;
+	struct v4l2_ctrl *hblank;
+	struct v4l2_ctrl *vblank;
+	struct v4l2_ctrl *exposure;
 
 	struct mutex lock;
 };
@@ -100,7 +111,7 @@ static const struct regmap_config imx290_regmap_config = {
 	.cache_type = REGCACHE_RBTREE,
 };
 
-static const char * const imx290_test_pattern_menu[] = {
+static const char *const imx290_test_pattern_menu[] = {
 	"Disabled",
 	"Sequence Pattern 1",
 	"Horizontal Color-bar Chart",
@@ -112,62 +123,20 @@ static const char * const imx290_test_pattern_menu[] = {
 };
 
 static const struct imx290_regval imx290_global_init_settings[] = {
-	{ 0x3007, 0x00 },
-	{ 0x3018, 0x65 },
-	{ 0x3019, 0x04 },
-	{ 0x301a, 0x00 },
-	{ 0x3444, 0x20 },
-	{ 0x3445, 0x25 },
-	{ 0x303a, 0x0c },
-	{ 0x3040, 0x00 },
-	{ 0x3041, 0x00 },
-	{ 0x303c, 0x00 },
-	{ 0x303d, 0x00 },
-	{ 0x3042, 0x9c },
-	{ 0x3043, 0x07 },
-	{ 0x303e, 0x49 },
-	{ 0x303f, 0x04 },
-	{ 0x304b, 0x0a },
-	{ 0x300f, 0x00 },
-	{ 0x3010, 0x21 },
-	{ 0x3012, 0x64 },
-	{ 0x3016, 0x09 },
-	{ 0x3070, 0x02 },
-	{ 0x3071, 0x11 },
-	{ 0x309b, 0x10 },
-	{ 0x309c, 0x22 },
-	{ 0x30a2, 0x02 },
-	{ 0x30a6, 0x20 },
-	{ 0x30a8, 0x20 },
-	{ 0x30aa, 0x20 },
-	{ 0x30ac, 0x20 },
-	{ 0x30b0, 0x43 },
-	{ 0x3119, 0x9e },
-	{ 0x311c, 0x1e },
-	{ 0x311e, 0x08 },
-	{ 0x3128, 0x05 },
-	{ 0x313d, 0x83 },
-	{ 0x3150, 0x03 },
-	{ 0x317e, 0x00 },
-	{ 0x32b8, 0x50 },
-	{ 0x32b9, 0x10 },
-	{ 0x32ba, 0x00 },
-	{ 0x32bb, 0x04 },
-	{ 0x32c8, 0x50 },
-	{ 0x32c9, 0x10 },
-	{ 0x32ca, 0x00 },
-	{ 0x32cb, 0x04 },
-	{ 0x332c, 0xd3 },
-	{ 0x332d, 0x10 },
-	{ 0x332e, 0x0d },
-	{ 0x3358, 0x06 },
-	{ 0x3359, 0xe1 },
-	{ 0x335a, 0x11 },
-	{ 0x3360, 0x1e },
-	{ 0x3361, 0x61 },
-	{ 0x3362, 0x10 },
-	{ 0x33b0, 0x50 },
-	{ 0x33b2, 0x1a },
+	{ 0x3007, 0x00 }, { 0x3018, 0x65 }, { 0x3019, 0x04 }, { 0x301a, 0x00 },
+	{ 0x3444, 0x20 }, { 0x3445, 0x25 }, { 0x303a, 0x0c }, { 0x3040, 0x00 },
+	{ 0x3041, 0x00 }, { 0x303c, 0x00 }, { 0x303d, 0x00 }, { 0x3042, 0x9c },
+	{ 0x3043, 0x07 }, { 0x303e, 0x49 }, { 0x303f, 0x04 }, { 0x304b, 0x0a },
+	{ 0x300f, 0x00 }, { 0x3010, 0x21 }, { 0x3012, 0x64 }, { 0x3016, 0x09 },
+	{ 0x3070, 0x02 }, { 0x3071, 0x11 }, { 0x309b, 0x10 }, { 0x309c, 0x22 },
+	{ 0x30a2, 0x02 }, { 0x30a6, 0x20 }, { 0x30a8, 0x20 }, { 0x30aa, 0x20 },
+	{ 0x30ac, 0x20 }, { 0x30b0, 0x43 }, { 0x3119, 0x9e }, { 0x311c, 0x1e },
+	{ 0x311e, 0x08 }, { 0x3128, 0x05 }, { 0x313d, 0x83 }, { 0x3150, 0x03 },
+	{ 0x317e, 0x00 }, { 0x32b8, 0x50 }, { 0x32b9, 0x10 }, { 0x32ba, 0x00 },
+	{ 0x32bb, 0x04 }, { 0x32c8, 0x50 }, { 0x32c9, 0x10 }, { 0x32ca, 0x00 },
+	{ 0x32cb, 0x04 }, { 0x332c, 0xd3 }, { 0x332d, 0x10 }, { 0x332e, 0x0d },
+	{ 0x3358, 0x06 }, { 0x3359, 0xe1 }, { 0x335a, 0x11 }, { 0x3360, 0x1e },
+	{ 0x3361, 0x61 }, { 0x3362, 0x10 }, { 0x33b0, 0x50 }, { 0x33b2, 0x1a },
 	{ 0x33b3, 0x04 },
 };
 
@@ -248,32 +217,20 @@ static const struct imx290_regval imx290_720p_settings[] = {
 };
 
 static const struct imx290_regval imx290_10bit_settings[] = {
-	{ 0x3005, 0x00},
-	{ 0x3046, 0x00},
-	{ 0x3129, 0x1d},
-	{ 0x317c, 0x12},
-	{ 0x31ec, 0x37},
-	{ 0x3441, 0x0a},
-	{ 0x3442, 0x0a},
-	{ 0x300a, 0x3c},
-	{ 0x300b, 0x00},
+	{ 0x3005, 0x00 }, { 0x3046, 0x00 }, { 0x3129, 0x1d },
+	{ 0x317c, 0x12 }, { 0x31ec, 0x37 }, { 0x3441, 0x0a },
+	{ 0x3442, 0x0a }, { 0x300a, 0x3c }, { 0x300b, 0x00 },
 };
 
 static const struct imx290_regval imx290_12bit_settings[] = {
-	{ 0x3005, 0x01 },
-	{ 0x3046, 0x01 },
-	{ 0x3129, 0x00 },
-	{ 0x317c, 0x00 },
-	{ 0x31ec, 0x0e },
-	{ 0x3441, 0x0c },
-	{ 0x3442, 0x0c },
-	{ 0x300a, 0xf0 },
-	{ 0x300b, 0x00 },
+	{ 0x3005, 0x01 }, { 0x3046, 0x01 }, { 0x3129, 0x00 },
+	{ 0x317c, 0x00 }, { 0x31ec, 0x0e }, { 0x3441, 0x0c },
+	{ 0x3442, 0x0c }, { 0x300a, 0xf0 }, { 0x300b, 0x00 },
 };
 
 /* supported link frequencies */
-#define FREQ_INDEX_1080P	0
-#define FREQ_INDEX_720P		1
+#define FREQ_INDEX_1080P 0
+#define FREQ_INDEX_720P 1
 static const s64 imx290_link_freq_2lanes[] = {
 	[FREQ_INDEX_1080P] = 445500000,
 	[FREQ_INDEX_720P] = 297000000,
@@ -308,7 +265,8 @@ static const struct imx290_mode imx290_modes_2lanes[] = {
 	{
 		.width = 1920,
 		.height = 1080,
-		.hmax = 0x1130,
+		.hmax = 0x0898,
+		.vmax = 0x0465,
 		.link_freq_index = FREQ_INDEX_1080P,
 		.data = imx290_1080p_settings,
 		.data_size = ARRAY_SIZE(imx290_1080p_settings),
@@ -316,7 +274,8 @@ static const struct imx290_mode imx290_modes_2lanes[] = {
 	{
 		.width = 1280,
 		.height = 720,
-		.hmax = 0x19c8,
+		.hmax = 0x0ce4,
+		.vmax = 0x02ee,
 		.link_freq_index = FREQ_INDEX_720P,
 		.data = imx290_720p_settings,
 		.data_size = ARRAY_SIZE(imx290_720p_settings),
@@ -328,6 +287,7 @@ static const struct imx290_mode imx290_modes_4lanes[] = {
 		.width = 1920,
 		.height = 1080,
 		.hmax = 0x0898,
+		.vmax = 0x0465,
 		.link_freq_index = FREQ_INDEX_1080P,
 		.data = imx290_1080p_settings,
 		.data_size = ARRAY_SIZE(imx290_1080p_settings),
@@ -336,13 +296,15 @@ static const struct imx290_mode imx290_modes_4lanes[] = {
 		.width = 1280,
 		.height = 720,
 		.hmax = 0x0ce4,
+		.vmax = 0x02ee,
 		.link_freq_index = FREQ_INDEX_720P,
 		.data = imx290_720p_settings,
 		.data_size = ARRAY_SIZE(imx290_720p_settings),
 	},
 };
 
-static inline const struct imx290_mode *imx290_modes_ptr(const struct imx290 *imx290)
+static inline const struct imx290_mode *
+imx290_modes_ptr(const struct imx290 *imx290)
 {
 	if (imx290->nlanes == 2)
 		return imx290_modes_2lanes;
@@ -363,7 +325,8 @@ static inline struct imx290 *to_imx290(struct v4l2_subdev *_sd)
 	return container_of(_sd, struct imx290, sd);
 }
 
-static inline int __always_unused imx290_read_reg(struct imx290 *imx290, u16 addr, u8 *value)
+static inline int __always_unused imx290_read_reg(struct imx290 *imx290,
+						  u16 addr, u8 *value)
 {
 	unsigned int regval;
 	int ret;
@@ -427,7 +390,8 @@ static int imx290_write_buffered_reg(struct imx290 *imx290, u16 address_low,
 		ret = imx290_write_reg(imx290, address_low + i,
 				       (u8)(value >> (i * 8)));
 		if (ret) {
-			dev_err(imx290->dev, "Error writing buffered registers\n");
+			dev_err(imx290->dev,
+				"Error writing buffered registers\n");
 			return ret;
 		}
 	}
@@ -452,6 +416,51 @@ static int imx290_set_gain(struct imx290 *imx290, u32 value)
 	return ret;
 }
 
+static int imx290_set_exposure(struct imx290 *imx290, u32 value)
+{
+	u32 exposure = (imx290->current_mode->height + imx290->vblank->val) -
+		       value - 1;
+	int ret;
+
+	ret = imx290_write_buffered_reg(imx290, IMX290_EXPOSURE_LOW, 3,
+					exposure);
+	if (ret)
+		dev_err(imx290->dev, "Unable to write exposure\n");
+
+	return ret;
+}
+
+static int imx290_set_hmax(struct imx290 *imx290, u32 val)
+{
+	u32 hmax = val + imx290->current_mode->width;
+	int ret;
+
+	ret = imx290_write_buffered_reg(imx290, IMX290_HMAX_LOW, 2, hmax);
+	if (ret)
+		dev_err(imx290->dev, "Error setting HMAX register\n");
+
+	return ret;
+}
+
+static int imx290_set_vmax(struct imx290 *imx290, u32 val)
+{
+	u32 vmax = val + imx290->current_mode->height;
+	int ret;
+
+	ret = imx290_write_buffered_reg(imx290, IMX290_VMAX_LOW, 3, vmax);
+	if (ret)
+		dev_err(imx290->dev, "Unable to write vmax\n");
+
+	/*
+             *   * Becuse of the way exposure works for this sensor, updating
+             *     * vblank causes the effective exposure to change, so we must
+             *       * set it back to the "new" correct value.
+             *         */
+	imx290_set_exposure(imx290, imx290->exposure->val);
+
+	return ret;
+}
+
 /* Stop streaming */
 static int imx290_stop_streaming(struct imx290 *imx290)
 {
@@ -468,9 +477,22 @@ static int imx290_stop_streaming(struct imx290 *imx290)
 
 static int imx290_set_ctrl(struct v4l2_ctrl *ctrl)
 {
-	struct imx290 *imx290 = container_of(ctrl->handler,
-					     struct imx290, ctrls);
+	struct imx290 *imx290 =
+		container_of(ctrl->handler, struct imx290, ctrls);
 	int ret = 0;
+
+	if (ctrl->id == V4L2_CID_VBLANK) {
+		u32 vmax = ctrl->val + imx290->current_mode->height;
+
+		/*
+             *     * Changing vblank changes the allowed range for exposure.
+             *         * We don't supply the current exposure as default here as it
+             *             * may lie outside the new range. We will reset it just below.
+             *                 */
+		__v4l2_ctrl_modify_range(imx290->exposure, IMX290_EXPOSURE_MIN,
+					 vmax - 2, IMX290_EXPOSURE_STEP,
+					 vmax - 2);
+	}
 
 	/* V4L2 controls values will be applied only when power is already up */
 	if (!pm_runtime_get_if_in_use(imx290->dev))
@@ -480,6 +502,15 @@ static int imx290_set_ctrl(struct v4l2_ctrl *ctrl)
 	case V4L2_CID_GAIN:
 		ret = imx290_set_gain(imx290, ctrl->val);
 		break;
+	case V4L2_CID_EXPOSURE:
+		ret = imx290_set_exposure(imx290, ctrl->val);
+		break;
+	case V4L2_CID_HBLANK:
+		ret = imx290_set_hmax(imx290, ctrl->val);
+		break;
+	case V4L2_CID_VBLANK:
+		ret = imx290_set_vmax(imx290, ctrl->val);
+		break;
 	case V4L2_CID_TEST_PATTERN:
 		if (ctrl->val) {
 			imx290_write_reg(imx290, IMX290_BLKLEVEL_LOW, 0x00);
@@ -487,8 +518,8 @@ static int imx290_set_ctrl(struct v4l2_ctrl *ctrl)
 			usleep_range(10000, 11000);
 			imx290_write_reg(imx290, IMX290_PGCTRL,
 					 (u8)(IMX290_PGCTRL_REGEN |
-					 IMX290_PGCTRL_THRU |
-					 IMX290_PGCTRL_MODE(ctrl->val)));
+					      IMX290_PGCTRL_THRU |
+					      IMX290_PGCTRL_MODE(ctrl->val)));
 		} else {
 			imx290_write_reg(imx290, IMX290_PGCTRL, 0x00);
 			usleep_range(10000, 11000);
@@ -634,8 +665,9 @@ static int imx290_set_fmt(struct v4l2_subdev *sd,
 			__v4l2_ctrl_s_ctrl(imx290->link_freq,
 					   imx290_get_link_freq_index(imx290));
 		if (imx290->pixel_rate)
-			__v4l2_ctrl_s_ctrl_int64(imx290->pixel_rate,
-						 imx290_calc_pixel_rate(imx290));
+			__v4l2_ctrl_s_ctrl_int64(
+				imx290->pixel_rate,
+				imx290_calc_pixel_rate(imx290));
 	}
 
 	*format = fmt->format;
@@ -650,7 +682,8 @@ static int imx290_entity_init_cfg(struct v4l2_subdev *subdev,
 {
 	struct v4l2_subdev_format fmt = { 0 };
 
-	fmt.which = sd_state ? V4L2_SUBDEV_FORMAT_TRY : V4L2_SUBDEV_FORMAT_ACTIVE;
+	fmt.which = sd_state ? V4L2_SUBDEV_FORMAT_TRY :
+				     V4L2_SUBDEV_FORMAT_ACTIVE;
 	fmt.format.width = 1920;
 	fmt.format.height = 1080;
 
@@ -665,20 +698,22 @@ static int imx290_write_current_format(struct imx290 *imx290)
 
 	switch (imx290->current_format.code) {
 	case MEDIA_BUS_FMT_SRGGB10_1X10:
-		ret = imx290_set_register_array(imx290, imx290_10bit_settings,
-						ARRAY_SIZE(
-							imx290_10bit_settings));
+		ret = imx290_set_register_array(
+			imx290, imx290_10bit_settings,
+			ARRAY_SIZE(imx290_10bit_settings));
 		if (ret < 0) {
-			dev_err(imx290->dev, "Could not set format registers\n");
+			dev_err(imx290->dev,
+				"Could not set format registers\n");
 			return ret;
 		}
 		break;
 	case MEDIA_BUS_FMT_SRGGB12_1X12:
-		ret = imx290_set_register_array(imx290, imx290_12bit_settings,
-						ARRAY_SIZE(
-							imx290_12bit_settings));
+		ret = imx290_set_register_array(
+			imx290, imx290_12bit_settings,
+			ARRAY_SIZE(imx290_12bit_settings));
 		if (ret < 0) {
-			dev_err(imx290->dev, "Could not set format registers\n");
+			dev_err(imx290->dev,
+				"Could not set format registers\n");
 			return ret;
 		}
 		break;
@@ -690,34 +725,15 @@ static int imx290_write_current_format(struct imx290 *imx290)
 	return 0;
 }
 
-static int imx290_set_hmax(struct imx290 *imx290, u32 val)
-{
-	int ret;
-
-	ret = imx290_write_reg(imx290, IMX290_HMAX_LOW, (val & 0xff));
-	if (ret) {
-		dev_err(imx290->dev, "Error setting HMAX register\n");
-		return ret;
-	}
-
-	ret = imx290_write_reg(imx290, IMX290_HMAX_HIGH, ((val >> 8) & 0xff));
-	if (ret) {
-		dev_err(imx290->dev, "Error setting HMAX register\n");
-		return ret;
-	}
-
-	return 0;
-}
-
 /* Start streaming */
 static int imx290_start_streaming(struct imx290 *imx290)
 {
 	int ret;
 
 	/* Set init register settings */
-	ret = imx290_set_register_array(imx290, imx290_global_init_settings,
-					ARRAY_SIZE(
-						imx290_global_init_settings));
+	ret = imx290_set_register_array(
+		imx290, imx290_global_init_settings,
+		ARRAY_SIZE(imx290_global_init_settings));
 	if (ret < 0) {
 		dev_err(imx290->dev, "Could not set init registers\n");
 		return ret;
@@ -820,7 +836,8 @@ static int imx290_set_data_lanes(struct imx290 *imx290)
 
 	ret = imx290_write_reg(imx290, IMX290_PHY_LANE_NUM, laneval);
 	if (ret) {
-		dev_err(imx290->dev, "Error setting Physical Lane number register\n");
+		dev_err(imx290->dev,
+			"Error setting Physical Lane number register\n");
 		goto exit;
 	}
 
@@ -879,9 +896,8 @@ static int imx290_power_off(struct device *dev)
 	return 0;
 }
 
-static const struct dev_pm_ops imx290_pm_ops = {
-	SET_RUNTIME_PM_OPS(imx290_power_off, imx290_power_on, NULL)
-};
+static const struct dev_pm_ops imx290_pm_ops = { SET_RUNTIME_PM_OPS(
+	imx290_power_off, imx290_power_on, NULL) };
 
 static const struct v4l2_subdev_video_ops imx290_video_ops = {
 	.s_stream = imx290_set_stream,
@@ -931,9 +947,8 @@ static int imx290_probe(struct i2c_client *client)
 	struct device *dev = &client->dev;
 	struct fwnode_handle *endpoint;
 	/* Only CSI2 is supported for now: */
-	struct v4l2_fwnode_endpoint ep = {
-		.bus_type = V4L2_MBUS_CSI2_DPHY
-	};
+	struct v4l2_fwnode_endpoint ep = { .bus_type = V4L2_MBUS_CSI2_DPHY };
+	const struct imx290_mode *mode;
 	struct imx290 *imx290;
 	u32 xclk_freq;
 	s64 fq;
@@ -1025,8 +1040,8 @@ static int imx290_probe(struct i2c_client *client)
 		goto free_err;
 	}
 
-	imx290->rst_gpio = devm_gpiod_get_optional(dev, "reset",
-						   GPIOD_OUT_HIGH);
+	imx290->rst_gpio =
+		devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_HIGH);
 	if (IS_ERR(imx290->rst_gpio)) {
 		dev_err(dev, "Cannot get reset gpio\n");
 		ret = PTR_ERR(imx290->rst_gpio);
@@ -1044,20 +1059,37 @@ static int imx290_probe(struct i2c_client *client)
 
 	v4l2_ctrl_handler_init(&imx290->ctrls, 4);
 
-	v4l2_ctrl_new_std(&imx290->ctrls, &imx290_ctrl_ops,
-			  V4L2_CID_GAIN, 0, 72, 1, 0);
+	v4l2_ctrl_new_std(&imx290->ctrls, &imx290_ctrl_ops, V4L2_CID_GAIN, 0,
+			  72, 1, 0);
 
-	imx290->link_freq =
-		v4l2_ctrl_new_int_menu(&imx290->ctrls, &imx290_ctrl_ops,
-				       V4L2_CID_LINK_FREQ,
-				       imx290_link_freqs_num(imx290) - 1, 0,
-				       imx290_link_freqs_ptr(imx290));
+	mode = imx290->current_mode;
+	imx290->hblank = v4l2_ctrl_new_std(&imx290->ctrls, &imx290_ctrl_ops,
+					   V4L2_CID_HBLANK,
+					   mode->hmax - mode->width,
+					   IMX290_HMAX_MAX - mode->width, 1,
+					   mode->hmax - mode->width);
+
+	imx290->vblank = v4l2_ctrl_new_std(&imx290->ctrls, &imx290_ctrl_ops,
+					   V4L2_CID_VBLANK,
+					   mode->vmax - mode->height,
+					   IMX290_VMAX_MAX - mode->height, 1,
+					   mode->vmax - mode->height);
+
+	imx290->exposure = v4l2_ctrl_new_std(
+		&imx290->ctrls, &imx290_ctrl_ops, V4L2_CID_EXPOSURE,
+		IMX290_EXPOSURE_MIN, mode->vmax - 2, IMX290_EXPOSURE_STEP,
+		mode->vmax - 2);
+
+	imx290->link_freq = v4l2_ctrl_new_int_menu(
+		&imx290->ctrls, &imx290_ctrl_ops, V4L2_CID_LINK_FREQ,
+		imx290_link_freqs_num(imx290) - 1, 0,
+		imx290_link_freqs_ptr(imx290));
 	if (imx290->link_freq)
 		imx290->link_freq->flags |= V4L2_CTRL_FLAG_READ_ONLY;
 
 	imx290->pixel_rate = v4l2_ctrl_new_std(&imx290->ctrls, &imx290_ctrl_ops,
-					       V4L2_CID_PIXEL_RATE,
-					       1, INT_MAX, 1,
+					       V4L2_CID_PIXEL_RATE, 1, INT_MAX,
+					       1,
 					       imx290_calc_pixel_rate(imx290));
 
 	v4l2_ctrl_new_std_menu_items(&imx290->ctrls, &imx290_ctrl_ops,

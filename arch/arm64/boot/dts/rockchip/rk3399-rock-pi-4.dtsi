@@ -509,11 +509,12 @@
 
         camera2: camera-module@36 {
                 status = "okay";
-                compatible = "ovti,ov5647";
+                compatible = "sony,imx290";
                 reg = <0x36>;
 
                 clocks = <&cru SCLK_CIF_OUT>;
-                clock-names = "clk_cif_out";
+                clock-names = "xclk";
+			          clock-frequency = <37125000>;
                 //pinctrl-names = "rockchip,camera_default";
 
                 port {
@@ -521,6 +522,7 @@
                                 remote-endpoint = <&mipi_in_ucam0>;
                                 //remote-endpoint = <&isp0_mipi_in>;
                                 data-lanes = <1 2>;
+                                link-frequencies = /bits/ 64 <445500000 297000000>;
                         };
                 };
         };
