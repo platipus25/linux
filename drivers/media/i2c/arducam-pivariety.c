@@ -1357,9 +1357,8 @@ static int pivariety_probe(struct i2c_client *client,
 
 	pivariety->xclk_freq = clk_get_rate(pivariety->xclk);
 	if (pivariety->xclk_freq != 24000000) {
-		dev_err(dev, "xclk frequency not supported: %d Hz\n",
+		dev_warn(dev, "xclk frequency not supported: %d Hz\n",
 			pivariety->xclk_freq);
-		return -EINVAL;
 	}
 
 	ret = pivariety_get_regulators(pivariety);

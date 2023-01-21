@@ -509,18 +509,18 @@
 
         camera2: camera-module@36 {
                 status = "okay";
-                compatible = "ovti,ov5647";
-                reg = <0x36>;
+                compatible = "arducam,arducam-pivariety";
+                reg = <0x0c>;
 
                 clocks = <&cru SCLK_CIF_OUT>;
-                clock-names = "clk_cif_out";
-                //pinctrl-names = "rockchip,camera_default";
+                clock-names = "xclk";
+                clock-frequency = <24000000>;
 
                 port {
                         ucam_out1: endpoint {
                                 remote-endpoint = <&mipi_in_ucam0>;
-                                //remote-endpoint = <&isp0_mipi_in>;
                                 data-lanes = <1 2>;
+                                link-frequencies = /bits/ 64 <456000000>;
                         };
                 };
         };
