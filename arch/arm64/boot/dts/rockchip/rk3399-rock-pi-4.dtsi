@@ -20,6 +20,14 @@
 		stdout-path = "serial2:1500000n8";
 	};
 
+
+  /* Fixed clock dedicated to SPI CAN controller */
+  clk40m: oscillator {
+    compatible = "fixed-clock";
+    #clock-cells = <0>;
+    clock-frequency = <40000000>;
+  };
+
 	clkin_gmac: external-gmac-clock {
 		compatible = "fixed-clock";
 		clock-frequency = <125000000>;
@@ -551,6 +559,20 @@
 	status = "okay";
 };
 
+&spi2 {
+	status = "okay";
+
+  can1: can@0 {
+		compatible = "microchip,mcp251xfd";
+		reg = <0>;
+		clocks = <&clk40m>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_can1_int>;
+		interrupts-extended = <&gpio4 4 IRQ_TYPE_LEVEL_LOW>; // CAN_INT1 gpio 36
+		spi-max-frequency = <20000000>;
+	};
+};
+
 &io_domains {
 	status = "okay";
 
@@ -680,6 +702,12 @@
 			rockchip,pins = <3 RK_PD5 RK_FUNC_GPIO &pcfg_pull_none>;
 		};
 	};
+
+  can {
+    pinctrl_can1_int: can1intgrp {
+			rockchip,pins = <4 RK_PA4 1 &pcfg_pull_up>;
+    };
+  };
 };
 
 &mipi_dphy_rx0 {
